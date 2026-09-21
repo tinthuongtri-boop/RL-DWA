@@ -4,7 +4,8 @@ import os, sys
 import gymnasium as gym
 from stable_baselines3 import SAC, HerReplayBuffer
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
-from stable_baselines3.common.callbacks import CallbackList, EvalCallback
+# Thêm CheckpointCallback vào danh sách import
+from stable_baselines3.common.callbacks import CallbackList, EvalCallback, CheckpointCallback
 
 sys.path.insert(0, os.path.abspath(os.path.join(__file__, os.pardir, os.pardir)))
 from lib.bunker_callback import BunkerCallback
@@ -13,15 +14,14 @@ from feature_extractor import FeatureExtractor
 
 def make_single_env(xml_paths: list[str], max_ep_steps: int, env_i: int):
     def _init():
-        xml_path = xml_paths[env_i % len(xml_paths)] # If I have 5 envs and 2 xmls, env 0 will use xml 0, env 1 will use xml 1, env 2 will use xml 0, etc.
-        # env = BunkerEnv(xml_path=xml_path, render_mode="human")
+        xml_path = xml_paths[env_i % len(xml_paths)] 
         env = BunkerEnv(xml_path=xml_path, render_mode=None, n_lidar=449)
         env = gym.wrappers.TimeLimit(env, max_episode_steps=max_ep_steps)
         return env
     return _init
 
 
-def train(train_xml_paths, val_xml_paths, total_steps, n_envs, max_ep_steps, log_dir):
+def train(train_xml_paths, val_xml_paths, total_steps, n_envs, max_ep_steps, log_dir, resume_path=None):
 
     os.makedirs(log_dir, exist_ok=True)
 
@@ -38,41 +38,58 @@ def train(train_xml_paths, val_xml_paths, total_steps, n_envs, max_ep_steps, log
     eval_callback = EvalCallback(eval_env, best_model_save_path=os.path.join(log_dir, "best_model"), log_path=log_dir, eval_freq=5_000,
                      n_eval_episodes=n_eval_episodes, deterministic=True, render=False, verbose=1)
     
-    callbacks = CallbackList([
-        eval_callback,
-        BunkerCallback()
-    ])
+    # Backup model tự động sau mỗi 10,000 bước để chống mất dữ liệu
+    checkpoint_callback = CheckpointCallback(save_freq=10_000, save_path=os.path.join(log_dir, "checkpoints"), name_prefix="rl_backup")
+    
+    callbacks = CallbackList()
 
-    # policy/network definition
-    policy_kwargs = dict(
-        features_extractor_class=FeatureExtractor,
-        features_extractor_kwargs=dict(features_dim=256, n_lidar=449, max_distance_diagonal=env.get_attr("max_distance_diagonal")[0]),
-        net_arch=[512, 512],
-    )
+    # Kiểm tra xem có yêu cầu Load Model cũ không
+    if resume_path and os.path.exists(resume_path):
+        print(f"\n==================================================")
+        print(f"🔄 ĐANG TẢI MODEL CŨ TỪ: {resume_path}")
+        print(f"AI sẽ nối tiếp kiến thức và tiếp tục huấn luyện!")
+        print(f"==================================================\n")
+        
+        # Load mô hình cũ lên
+        model = SAC.load(resume_path, env=env, device="cuda")
+        
+        # Cập nhật lại đường dẫn để vẽ biểu đồ Tensorboard mới
+        model.tensorboard_log = os.path.join(log_dir, "tb")
+    else:
+        print("\n==================================================")
+        print("🚀 KHỞI TẠO MÔ HÌNH MỚI HOÀN TOÀN TỪ SỐ 0")
+        print("==================================================\n")
+        
+        # policy/network definition
+        policy_kwargs = dict(
+            features_extractor_class=FeatureExtractor,
+            features_extractor_kwargs=dict(features_dim=256, n_lidar=449, max_distance_diagonal=env.get_attr("max_distance_diagonal")),
+            net_arch= [],
+        )
 
-    model = SAC(
-        policy="MultiInputPolicy",
-        env=env,
-        policy_kwargs=policy_kwargs,
-        replay_buffer_class=HerReplayBuffer,
-        replay_buffer_kwargs=dict(
-            n_sampled_goal=4,
-            goal_selection_strategy="future",
-            copy_info_dict=True,
-        ),
-        batch_size=512,
-        learning_rate=3e-4,
-        learning_starts=n_envs * max_ep_steps,
-        gamma=0.99,
-        tau=0.005,
-        buffer_size=1_000_000,
-        train_freq=(1, "step"),
-        gradient_steps=1,
-        target_update_interval=2,
-        tensorboard_log=os.path.join(log_dir, "tb"),
-        verbose=1,
-        device="cuda",
-    )
+        model = SAC(
+            policy="MultiInputPolicy",
+            env=env,
+            policy_kwargs=policy_kwargs,
+            replay_buffer_class=HerReplayBuffer,
+            replay_buffer_kwargs=dict(
+                n_sampled_goal=4,
+                goal_selection_strategy="future",
+                copy_info_dict=True,
+            ),
+            batch_size=512,
+            learning_rate=3e-4,
+            learning_starts=n_envs * max_ep_steps,
+            gamma=0.99,
+            tau=0.005,
+            buffer_size=1_000_000,
+            train_freq=(1, "step"),
+            gradient_steps=1,
+            target_update_interval=2,
+            tensorboard_log=os.path.join(log_dir, "tb"),
+            verbose=1,
+            device="cuda",
+        )
 
     print(f"Starting training on {n_envs} environments...")
     print(f"Logging to {log_dir}")
@@ -126,4 +143,19 @@ if __name__ == "__main__":
     
     max_ep_steps = 600 # This is 6000 Mujoco steps, because I have a n_frames = 10
 
-    train(train_xml_paths=train_xml_pool, val_xml_paths=val_xml_pool, total_steps=total_steps, n_envs=n_envs, max_ep_steps=max_ep_steps, log_dir=log_dir)
+    # ---------------------------------------------------------
+    # CHỖ NÀY DÀNH CHO BẠN ĐIỀN ĐƯỜNG DẪN LOAD MODEL 
+    # Dựa theo ảnh màn hình của bạn, file zip nằm ở run_3
+    # Khi sang Windows, bạn hãy đổi đường dẫn này cho phù hợp nhé.
+    # ---------------------------------------------------------
+    RESUME_PATH = r"log/run_3/best_model/best_model.zip"
+
+    train(
+        train_xml_paths=train_xml_pool, 
+        val_xml_paths=val_xml_pool, 
+        total_steps=total_steps, 
+        n_envs=n_envs, 
+        max_ep_steps=max_ep_steps, 
+        log_dir=log_dir,
+        resume_path=RESUME_PATH # Đã thêm biến này vào hàm train
+    )

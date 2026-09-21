@@ -1,0 +1,136 @@
+<mujoco model="Empty_Corridor3_25m">
+
+  <!-- ========================= -->
+  <!-- COMPILER + OPTION -->
+  <!-- ========================= -->
+  <compiler angle="radian" coordinate="local" autolimits="true"/>
+  <option timestep="0.01" cone="elliptic" integrator="RK4" gravity="0 0 -9.81"/>
+
+  <!-- ========================= -->
+  <!-- VISUAL STYLE (bunker style) -->
+  <!-- ========================= -->
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6"
+               ambient="0.1 0.1 0.1"
+               specular="0 0 0"/>
+
+    <rgba haze="0.15 0.25 0.35 1"/>
+
+    <global azimuth="135"
+            elevation="-28"/>
+  </visual>
+
+  <!-- ========================= -->
+  <!-- ASSETS (ground texture style giống bunker) -->
+  <!-- ========================= -->
+  <asset>
+    <texture type="skybox"
+             builtin="gradient"
+             rgb1="0.3 0.5 0.7"
+             rgb2="0 0 0"
+             width="512"
+             height="3072"/>
+
+    <texture type="2d"
+             name="groundplane"
+             builtin="checker"
+             mark="edge"
+             rgb1="0.2 0.3 0.4"
+             rgb2="0.1 0.2 0.3"
+             markrgb="0.8 0.8 0.8"
+             width="300"
+             height="300"/>
+
+    <material name="groundplane"
+              texture="groundplane"
+              texuniform="true"
+              texrepeat="5 5"
+              reflectance="0.2"/>
+  </asset>
+
+  <!-- ========================= -->
+  <!-- WORLD -->
+  <!-- ========================= -->
+  <worldbody>
+
+    <!-- LIGHT -->
+    <light name="spotlight"
+           pos="0 0 100"
+           mode="targetbodycom"
+           target="goal"
+           castshadow="false"/>
+
+    <!-- FLOOR (giữ nguyên nhưng đổi style bunker) -->
+    <geom name="floor"
+          type="plane"
+          pos="12.5 0 0"
+          size="12.5 5 0.05"
+          material="groundplane"
+          conaffinity="1"
+          condim="3"/>
+
+        <!-- WALLS -->
+        <geom type="box" pos="12.5 5.3 0.5" size="12.5 0.2 0.5" rgba="0.25 0.25 0.25 1"/>
+        <geom type="box" pos="12.5 -5.3 0.5" size="12.5 0.2 0.5" rgba="0.25 0.25 0.25 1"/>
+        <geom type="box" pos="0 0 0.5" size="0.2 5.3 0.5" rgba="0.25 0.25 0.25 1"/>
+        <geom type="box" pos="25 0 0.5" size="0.2 5.3 0.5" rgba="0.25 0.25 0.25 1"/>
+
+        <!-- ========================= -->
+        <!-- LONG PASSAGE (BOTTLENECK) -->
+        <!-- width ~0.8m gap -->
+        <!-- ========================= -->
+
+        <!-- left wall -->
+        <geom type="box" pos="3.0  2.5 0.5" size="0.6 1.7 0.5" rgba="0.9 0.2 0.2 1"/>
+        <geom type="box" pos="3.6  2.5 0.5" size="0.6 1.7 0.5" rgba="0.9 0.2 0.2 1"/>
+        <geom type="box" pos="4.2  2.5 0.5" size="0.6 1.7 0.5" rgba="0.9 0.2 0.2 1"/>
+        <geom type="box" pos="4.8  2.5 0.5" size="0.6 1.7 0.5" rgba="0.9 0.2 0.2 1"/>
+        <geom type="box" pos="5.4  2.5 0.5" size="0.6 1.7 0.5" rgba="0.9 0.2 0.2 1"/>
+        <geom type="box" pos="6.0  2.5 0.5" size="0.6 1.7 0.5" rgba="0.9 0.2 0.2 1"/>
+
+        <!-- right wall -->
+        <geom type="box" pos="3.0  -2.5 0.5" size="0.6 1.7 0.5" rgba="0.9 0.2 0.2 1"/>
+        <geom type="box" pos="3.6  -2.5 0.5" size="0.6 1.7 0.5" rgba="0.9 0.2 0.2 1"/>
+        <geom type="box" pos="4.2  -2.5 0.5" size="0.6 1.7 0.5" rgba="0.9 0.2 0.2 1"/>
+        <geom type="box" pos="4.8  -2.5 0.5" size="0.6 1.7 0.5" rgba="0.9 0.2 0.2 1"/>
+        <geom type="box" pos="5.4  -2.5 0.5" size="0.6 1.7 0.5" rgba="0.9 0.2 0.2 1"/>
+        <geom type="box" pos="6.0  -2.5 0.5" size="0.6 1.7 0.5" rgba="0.9 0.2 0.2 1"/>
+
+        <!-- exit of passage -->
+        <geom type="box" pos="9 0 0.5" size="0.65 0.65 0.5" rgba="1 0 0 1"/>
+
+        <!-- ========================= -->
+        <!-- IMMEDIATE ZIGZAG (RIGHT AFTER EXIT) -->
+        <!-- ========================= -->
+
+        <geom type="box" pos="10  3.6 0.5" size="0.5 1.2 0.5" rgba="1 0.5 0 1"/>
+        <geom type="box" pos="11 -2.8 0.5" size="0.5 1.2 0.5" rgba="1 0.5 0 1"/>
+        <geom type="box" pos="12  2.8 0.5" size="0.5 1.2 0.5" rgba="1 0.5 0 1"/>
+        <geom type="box" pos="13 -2.4 0.5" size="0.5 1.2 0.5" rgba="1 0.5 0 1"/>
+
+        <!-- more irregular zigzag -->
+        <geom type="box" pos="15  1.9 0.5" size="0.5 1.0 0.5" rgba="1 0.5 0 1"/>
+        <geom type="box" pos="16 -1.9 0.5" size="0.5 1.0 0.5" rgba="1 0.5 0 1"/>
+
+        <!-- ========================= -->
+        <!-- MID ZONE -->
+        <!-- ========================= -->
+
+        <geom type="box" pos="18 0 0.5" size="0.65 0.65 0.5" rgba="1 0 0 1"/>
+
+        <geom type="box" pos="20  1.6 0.5" size="0.6 0.8 0.5" rgba="0.8 0 0.8 1"/>
+        <geom type="box" pos="22 -1.6 0.5" size="0.6 0.8 0.5" rgba="0.8 0 0.8 1"/>
+
+
+        <!-- ========================= -->
+        <!-- FINAL ZONE -->
+        <!-- ========================= -->
+
+
+        <!-- GOAL -->
+        <body name="goal" pos="24 0 0.1" mocap="true">
+            <site name="goal_site" type="sphere" size="0.4" rgba="0 1 0 1"/>
+        </body>
+
+    </worldbody>
+</mujoco>

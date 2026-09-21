@@ -18,7 +18,7 @@ from feature_extractor import FeatureExtractor
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Variables
-run_name = "run_1"
+run_name = "run_8"
 max_goal_sampling_distance = 8.0
 env_name = "test/world_17_easy"
 
@@ -27,7 +27,7 @@ xml  = os.path.join(root, "assets", "worlds", f"{env_name}.xml")
 ckpt = os.path.join(root, "SAC_Sparse_HER", "log", run_name, "best_model", "best_model.zip")
 
 # Environment Setup
-env = DummyVecEnv([lambda: TimeLimit(BunkerEnv(xml_path=xml, render_mode="human", max_goal_sampling_distance=max_goal_sampling_distance), 
+env = DummyVecEnv([lambda: TimeLimit(BunkerEnv(xml_path=xml, render_mode=None, max_goal_sampling_distance=max_goal_sampling_distance), 
                                                 max_episode_steps=600)])
 
 # Get env constants for observation decoding
@@ -117,7 +117,7 @@ for batch in range(n_batches):
 
             curr_v, curr_ang_vel = raw_env.get_robot_velocities()
             curr_v = curr_v[0]
-            curr_ang_vel = curr_ang_vel[2]
+            curr_ang_vel = curr_ang_vel[1]
 
             step_dist = abs(curr_v) * dt
             ep_path_length += step_dist
