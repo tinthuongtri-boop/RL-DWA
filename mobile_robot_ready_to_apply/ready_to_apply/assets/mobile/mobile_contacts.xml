@@ -1,0 +1,19 @@
+<mujocoinclude>
+    <!-- left_wheel / right_wheel are SIBLINGS of base_link (both are direct
+         children of "mobile_base"), NOT parent/child of it, so MuJoCo's
+         automatic "skip contacts between directly-connected bodies" rule
+         does not exclude wheel-vs-chassis contact. The real chassis has a
+         wheel well the collision mesh doesn't know about, so the spinning
+         wheel's cylinder intermittently overlaps the chassis convex hull,
+         producing large oscillating contact forces (confirmed empirically:
+         wheel joint velocity oscillated -130..+115 rad/s under a constant
+         3 rad/s command until this exclude block was added).
+         Must be included at the top MJCF level (sibling of <worldbody>),
+         not inside it. -->
+    <contact>
+        <exclude body1="left_wheel"  body2="base_link"/>
+        <exclude body1="right_wheel" body2="base_link"/>
+        <exclude body1="left_wheel"  body2="mobile_base"/>
+        <exclude body1="right_wheel" body2="mobile_base"/>
+    </contact>
+</mujocoinclude>

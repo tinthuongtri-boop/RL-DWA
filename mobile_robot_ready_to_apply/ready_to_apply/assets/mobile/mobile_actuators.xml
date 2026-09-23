@@ -1,0 +1,18 @@
+<mujocoinclude>
+    <!-- Chỉ 2 actuator (đúng 1 bánh chủ động mỗi bên) thay vì 6 actuator
+         (3 bánh/mỗi bên) như Bunker skid-steer. BunkerVelocityController
+         (lib/bunker_velocity_controller.py) không cần sửa: nó chỉ lặp qua
+         act_r/act_l là list actuator id, list 1 phần tử vẫn hoạt động đúng. -->
+    <actuator>
+        <velocity name="left_wheel"  joint="left_wheel_joint"  kv="150"
+                  ctrllimited="true" ctrlrange="-50 50" forcerange="-200 200"/>
+        <velocity name="right_wheel" joint="right_wheel_joint" kv="150"
+                  ctrllimited="true" ctrlrange="-50 50" forcerange="-200 200"/>
+    </actuator>
+
+    <sensor>
+        <rangefinder site="rf" cutoff="20.0"/>
+        <actuatorfrc name="sf_left"  actuator="left_wheel"/>
+        <actuatorfrc name="sf_right" actuator="right_wheel"/>
+    </sensor>
+</mujocoinclude>
