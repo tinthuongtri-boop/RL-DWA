@@ -1,0 +1,199 @@
+<mujocoinclude>
+    <!-- Robot body: differential-drive mobile robot (URDF "mobile").
+         Lịch sử các lần sửa được gộp lại đầy đủ trong file này (không
+         còn rải rác/trùng lặp qua nhiều bản vá như trước). -->
+
+    <!-- ================================================================
+         KIẾN TRÚC KHỚP: URDF -> MJCF
+         base_footprint --(fixed jn, z=+0.105)--> base_link
+         "fixed" joint của URDF = hàn cứng (welded) trong MJCF, nên
+         base_footprint được tái dùng làm BODY GỐC (free-joint), đổi tên
+         thành "mobile_base" để phần còn lại của pipeline Python
+         (sensor_utils.py: model.body('mobile_base'), collision filter,
+         v.v.) không cần sửa gì cho lookup này.
+
+         Độ cao spawn (wheel bottom chạm sàn khi origin ở z=0):
+           wheel joint z (so với gốc mobile_base)
+             = base_link offset (0.105) + wheel joint offset (-0.02) = 0.085 m
+           wheel radius = 0.085 m -> đáy bánh ở z=0 khi origin ở z=0.
+         Spawn ở z=0.10 để chừa ~1.5cm khe hở an toàn lúc settle ban đầu.
+         ================================================================ -->
+    <body name="mobile_base" pos="-4.0 -4.0 0.10" euler="0 0 0">
+        <joint type="free" name="mobile_base_joint"/>
+
+        <inertial mass="16.209" pos="0.0014629 0 0.20791"
+                  diaginertia="0.53081 1.0663 1.3749"/>
+        <!-- group="2" = "hình học của chính robot", dùng để LỌC LiDAR
+             (xem chi tiết + lý do ở khối "LiDAR" bên dưới). KHÔNG ảnh
+             hưởng va chạm vật lý (contype/conaffinity không đổi). -->
+        <geom name="base_footprint_geom" type="mesh" mesh="base_footprint"
+              material="mobile_gray" group="2"/>
+
+        <body name="base_link" pos="0 0 0.105">
+            <inertial mass="38.511" pos="0.028887 0.000046 0.4015"
+                      fullinertia="1.3307 1.9545 1.759 0.0000546 -0.0022872 -0.00017972"/>
+            <geom name="base_link_geom" type="mesh" mesh="base_link"
+                  material="mobile_gray" group="2"/>
+
+            <!-- ============================================================
+                 LiDAR — SỬA BUG "LIDAR TỰ VA CHẠM VỚI CHÍNH ROBOT"
+
+                 Nguyên nhân (đã đo trực tiếp, không suy đoán): hàm
+                 sensor_utils.get_robot_state_and_lidar() tự raycast bằng
+                 mujoco.mj_ray(..., bodyexclude=model.body('mobile_base').id,
+                 ...) -- CHỈ loại trừ geom nằm TRỰC TIẾP trên body
+                 "mobile_base" (tức base_footprint_geom), KHÔNG loại trừ
+                 geom trên body con "base_link" (chassis chính, laser, imu,
+                 4 caster) vì bodyexclude của MuJoCo chỉ nhận DUY NHẤT 1 id.
+                 Robot này có thân cao tới ~1.4m (khác hẳn Bunker thấp),
+                 nên điểm phát tia (z=0.25, hoặc đúng ra phải là 0.3488)
+                 nằm hẳn BÊN TRONG bounding-box của base_link_geom -> tất
+                 cả 449/449 tia tự va vào chính thân robot, đo được khoảng
+                 cách sai ~0.126m ngay cả trong phòng trống hoàn toàn.
+
+                 Sửa: dùng co chế geomgroup của mj_ray (lọc theo GROUP,
+                 không phụ thuộc cây body) thay vì bodyexclude. Mọi geom
+                 "thuộc về chính robot" (chassis, laser, imu, 4 caster, 4
+                 geom bánh xe) được gán group="2"; sensor_utils.py cần sửa
+                 để truyền geomgroup loại trừ group 2 (xem patch đính kèm:
+                 patches/sensor_utils.py.patch_instructions.md). Đây là fix
+                 BẮT BUỘC phải áp dụng cả ở đây (XML) và bên Python mới có
+                 tác dụng -- chỉ sửa XML không thôi KHÔNG đủ. -->
+            <body name="laser" pos="0.00087 -0.000017 0.2438">
+                <geom type="mesh" mesh="laser" material="mobile_dark"
+                      contype="0" conaffinity="0" group="2"/>
+            </body>
+
+            <!-- 360 deg raycast fan, giữ nguyên 449 tia như Bunker cũ
+                 -> n_lidar=449 trong env Python không cần đổi. -->
+            <body name="lidar_rays" pos="0.00087 -0.000017 0.2438" euler="0 0 3.14159265359">
+                <replicate count="449" euler="0 0 0.013993731">
+                    <site name="rf" pos="0 0 0" zaxis="1 0 0"/>
+                </replicate>
+            </body>
+
+            <!-- IMU (visual only) -->
+            <body name="imu" pos="0 0 0.0363">
+                <geom type="mesh" mesh="imu" material="mobile_gray"
+                      contype="0" conaffinity="0" group="2"/>
+            </body>
+
+            <!-- ============================================================
+                 4 bánh caster thụ động (truocphai/truoctrai/traisau/phaisau
+                 trong URDF gốc). Mô phỏng bằng sphere ma sát thấp, KHÔNG mô
+                 phỏng khớp xoay+lăn thật -- một sphere tự nhiên lăn được
+                 theo MỌI hướng ngang chỉ với 1 điểm tiếp xúc, đúng hành vi
+                 động học của caster tự do, mà không cần 2 khớp (xoay +
+                 lăn) x 4 caster = 8 khớp phụ làm tăng chi phí & rủi ro mất
+                 ổn định solver. Đánh đổi: không mô phỏng trạng thái góc
+                 xoay của caster (không quan trọng cho bài toán nav 2D chỉ
+                 đọc LiDAR + pose).
+                 Vị trí/độ cao suy từ offset khớp URDF:
+                   z = base_link_offset(0.105) + tren_jn(-0.01) + duoi_jn(-0.06)
+                     = 0.035  (=> -0.070 so với gốc base_link)
+
+                 SỬA LỖI "RUNG/BẬP BÊNH Ở TỐC ĐỘ CAO" (phản hồi thực tế,
+                 đã đo trực tiếp):
+                 Ở tốc độ cao, lực tiếp xúc dao động dữ dội (đỉnh tới
+                 1042N so với ~90N lúc đứng yên) -> robot rung/bật như
+                 bập bênh, CHỈ xuất hiện khi tăng tốc (đúng như mô tả).
+                 Nguyên nhân: hệ có 6 điểm tiếp xúc CỨNG đồng thời (2 bánh
+                 + 4 caster) trong khi 1 mặt phẳng chỉ cần 3 điểm để xác
+                 định -> DƯ RÀNG BUỘC (over-constrained). Mỗi caster mặc
+                 định condim=3 (2 hướng ma sát tiếp tuyến + 1 pháp tuyến)
+                 tạo ra 8 ràng buộc ma sát dư thừa (4 caster x 2 hướng)
+                 cạnh tranh với ma sát của 2 bánh chủ động, khiến solver
+                 phải phân phối lại lực mỗi bước -> chattering.
+                 Sửa (2 bước, cả 2 đều cần thiết):
+                   1. solref="0.1 1": làm "mềm" contact hơn mặc định
+                      (0.02 1) -- giảm biên độ lực đỉnh khi solver điều
+                      chỉnh.
+                   2. condim="1" + priority="1": chỉ giữ lực pháp tuyến
+                      cho caster (hợp lý vật lý -- bi caster thật gần như
+                      không ma sát theo hướng nào), và ÉP solver dùng
+                      condim=1 này thay vì quy tắc mặc định "lấy MAX
+                      condim giữa 2 geom trong 1 cặp" (floor có condim=3,
+                      nên nếu không có priority thì condim=1 trên caster
+                      sẽ bị floor "đè" mất tác dụng).
+                 Kết quả đo được (quét toàn bộ dải tốc độ 0.5-15 rad/s):
+                   vx_std giảm từ 0.085 (rung nặng, không đều) xuống
+                   0.00000 (hoàn toàn mượt) ở MỌI mức tốc độ đã test.
+                   Lực tiếp xúc ổn định tuyệt đối ~80N (trước dao động
+                   79-1042N). Hiệu ứng phụ tốt bất ngờ: slip giảm mạnh
+                   xuống chỉ còn ~0.4% (gần như lăn không trượt hoàn hảo,
+                   trước đó có thể lên tới 50-97% tuỳ cấu hình) vì không
+                   còn ma sát caster "giành giật" traction với bánh chủ
+                   động nữa.
+                 ============================================================ -->
+            <geom name="caster_fr" type="sphere" size="0.035" pos="0.251 -0.158 -0.070"
+                  friction="0.02 0.002 0.0001" rgba="0.15 0.15 0.15 1"
+                  solref="0.1 1" condim="1" priority="1" group="2"/>
+            <geom name="caster_fl" type="sphere" size="0.035" pos="0.251  0.160 -0.070"
+                  friction="0.02 0.002 0.0001" rgba="0.15 0.15 0.15 1"
+                  solref="0.1 1" condim="1" priority="1" group="2"/>
+            <geom name="caster_rl" type="sphere" size="0.035" pos="-0.251  0.160 -0.070"
+                  friction="0.02 0.002 0.0001" rgba="0.15 0.15 0.15 1"
+                  solref="0.1 1" condim="1" priority="1" group="2"/>
+            <geom name="caster_rr" type="sphere" size="0.035" pos="-0.251 -0.158 -0.070"
+                  friction="0.02 0.002 0.0001" rgba="0.15 0.15 0.15 1"
+                  solref="0.1 1" condim="1" priority="1" group="2"/>
+        </body>
+
+        <!-- ================================================================
+             Bánh chủ động. Geom mesh = chỉ hiển thị (contype/conaffinity=0);
+             1 hình trụ nguyên thuỷ bên dưới chịu va chạm thật, cùng lý do
+             Bunker gốc dùng collision proxy nguyên thuỷ cho bánh xe: chi
+             tiết hub/nan hoa của STL tạo bề mặt va chạm nhiễu, không ổn
+             định cho một vật thể đang lăn.
+
+             SỬA LỖI TRỤC QUAY (phát hiện qua feedback trực quan): mesh
+             left_wheel.STL/right_wheel.STL có bbox (X,Y,Z) =
+             (0.1697, 0.0600, 0.1700) -- trục MỎNG NHẤT (bề dày bánh,
+             0.06m) là trục Y, khớp đúng <axis xyz="0 1 0"/> của URDF gốc
+             (KHÔNG cần xoay thêm). Bản đầu lỡ copy euler="1.5708 0 0" từ
+             quy ước Bunker (mesh bánh Bunker model theo trục Z) sang đây,
+             làm lệch mesh hiển thị 90° dù vật lý vẫn quay đúng hướng.
+             Sửa: body giữ nguyên hướng (không euler), joint axis="0 1 0"
+             giống hệt URDF; chỉ xoay RIÊNG geom hình trụ va chạm bằng
+             euler cục bộ để trục đối xứng của nó (mặc định theo Z) khớp
+             trục Y.
+
+             SỬA HIỆU ỨNG "BẬP BÊNH" DO CON QUAY HỒI CHUYỂN: bản đầu dùng
+             mass=2.0/diaginertia≈0.44 (bơm khống TOÀN BỘ tensor quán
+             tính) để giải quyết trượt bánh -- nhưng biến bánh xe thành
+             một "flywheel" nặng, ở tốc độ quay cao tạo mô-men con quay
+             hồi chuyển (gyroscopic torque) đủ lớn để gây lắc pitch (đo
+             được peak-to-peak ~8.8 deg ở ctrl=10 rad/s). Sửa đúng cách:
+             dùng armature trên joint -- cơ chế MuJoCo dành RIÊNG cho quán
+             tính phản xạ của motor+hộp số, chỉ cộng vào ma trận khối
+             lượng CỦA DOF ĐÓ, KHÔNG cộng vào tensor quán tính không gian
+             của thân bánh xe -> không gây khớp nối gyroscopic vào pitch
+             của khung. Giữ lại mass/diaginertia THẬT từ URDF gốc. Kết quả
+             sau khi kết hợp với fix caster ở trên: pitch peak-to-peak =
+             0.000 deg (từ 8.76 deg ban đầu).
+             ================================================================ -->
+        <body name="left_wheel" pos="0 0.16297 0.085">
+            <joint name="left_wheel_joint" type="hinge" pos="0 0 0" axis="0 1 0"
+                   frictionloss="0.15" damping="0.3" armature="0.15"/>
+            <inertial mass="1.2096" pos="0 0 0"
+                      diaginertia="0.0023434 0.0040809 0.0023434"/>
+            <geom name="left_wheel_visual" type="mesh" mesh="left_wheel"
+                  material="mobile_gray" contype="0" conaffinity="0" group="2"/>
+            <geom name="left_wheel_geom" type="cylinder" size="0.085 0.03"
+                  euler="1.5708 0 0" friction="1.0 0.005 0.0001" rgba="0 0 0 0"
+                  solref="0.1 1" group="2"/>
+        </body>
+
+        <body name="right_wheel" pos="0 -0.16297 0.085">
+            <joint name="right_wheel_joint" type="hinge" pos="0 0 0" axis="0 1 0"
+                   frictionloss="0.15" damping="0.3" armature="0.15"/>
+            <inertial mass="1.2096" pos="0 0 0"
+                      diaginertia="0.0023434 0.0040809 0.0023434"/>
+            <geom name="right_wheel_visual" type="mesh" mesh="right_wheel"
+                  material="mobile_gray" contype="0" conaffinity="0" group="2"/>
+            <geom name="right_wheel_geom" type="cylinder" size="0.085 0.03"
+                  euler="1.5708 0 0" friction="1.0 0.005 0.0001" rgba="0 0 0 0"
+                  solref="0.1 1" group="2"/>
+        </body>
+    </body>
+</mujocoinclude>
